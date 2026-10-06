@@ -68,4 +68,12 @@ npm run build
 - 字段、状态、动作与流转目标集中在 `frontend/src/data/modules.ts`；示例数据在
   `frontend/src/data/seed.ts`。
 - 状态流转只允许在 `local-service.ts` 里改，页面组件不做业务判断。
-- 想回到初始数据：清掉浏览器里 `shield-tunnel-construction:entries` 这一项，或调用 `resetModule(模块)`。
+- 管片拼装不走通用流转：状态机、验收结论、越权校验、返工待办全部收口在
+  `frontend/src/domain/segment.ts`（唯一事实源），存量迁移在
+  `frontend/src/domain/segment-migration.ts`（启动时按拼装日期分批回填，幂等可续跑）。
+  - 流水线单向：待拼装 → 拼装中 → 已验收；验收不通过退回拼装中，跳级当场挡回。
+  - 判定标准作数版本为《管片拼装质量验收标准 V2026-1》（螺栓扭矩「达标」、错台量 ≤ 10mm）。
+  - 只有本拼装班组的质检员能提交验收；一张验收单一个幂等令牌，重复提交原样退回。
+  - 管片生产页面的返工待办与拼装报表读同一份拼装记录，返工环数两处一致。
+- 想回到初始数据：清掉浏览器里 `shield-tunnel-construction:entries` 与
+  `shield-tunnel-construction:meta:segment-workflow-v1` 两项，或调用 `resetModule(模块)`。

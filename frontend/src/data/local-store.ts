@@ -3,6 +3,7 @@ import type { EntryRow } from './types'
 
 // 本地持久化：数据放在 localStorage 里，刷新、关掉再打开都还在。
 const STORAGE_KEY = 'shield-tunnel-construction:entries'
+const META_PREFIX = 'shield-tunnel-construction:meta:'
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
@@ -40,12 +41,17 @@ export function listRows(key: string): EntryRow[] {
   return allRows()[key] ?? []
 }
 
+/**
+ * 整笔覆盖落库：先把整份数据序列化，序列化或存储抛错时不动缓存、不动旧值，
+ * 调用方一笔业务要么完整写入，要么原样退回，不会留下半成品。
+ */
 export function saveRows(key: string, rows: EntryRow[]): void {
   const next = { ...allRows(), [key]: rows }
-  cache = next
+  const serialized = JSON.stringify(next)
   if (typeof window !== 'undefined' && window.localStorage) {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+    window.localStorage.setItem(STORAGE_KEY, serialized)
   }
+  cache = next
 }
 
 export function resetRows(key: string): EntryRow[] {
@@ -56,4 +62,18 @@ export function resetRows(key: string): EntryRow[] {
 
 export function storageKey(): string {
   return STORAGE_KEY
+}
+
+/** 迁移游标等元信息，与业务数据分开存。 */
+export function readMeta(name: string): string | null {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return null
+  }
+  return window.localStorage.getItem(META_PREFIX + name)
+}
+
+export function writeMeta(name: string, value: string): void {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    window.localStorage.setItem(META_PREFIX + name, value)
+  }
 }
