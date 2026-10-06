@@ -48,6 +48,25 @@ export function saveRows(key: string, rows: EntryRow[]): void {
   }
 }
 
+// 原子提交多模块：必须整份落库成功后才更新内存缓存。
+// 存储抛错（配额满、存储被禁用等）时缓存保持原样，调用方收到错误即可把提交原样退回。
+export function commitRows(next: Record<string, EntryRow[]>): void {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    // 先写库：setItem 在配额不足时会抛 QuotaExceededError。
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+  }
+  // 落库成功后才更新缓存，保证两处读到的永远是同一份。
+  cache = next
+}
+
+// 仅供测试：重置内存缓存与 localStorage，让每条用例从干净状态起步。
+export function __resetStoreForTest(): void {
+  cache = null
+  if (typeof window !== 'undefined' && window.localStorage) {
+    window.localStorage.removeItem(STORAGE_KEY)
+  }
+}
+
 export function resetRows(key: string): EntryRow[] {
   const rows = clone(SEED_ROWS[key] ?? [])
   saveRows(key, rows)

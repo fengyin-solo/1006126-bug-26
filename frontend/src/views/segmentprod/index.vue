@@ -14,9 +14,44 @@
     <div class="stat-row">
       <article v-for="item in stats" :key="item.label" class="stat-card">
         <span class="stat-label">{{ item.label }}</span>
-        <strong class="stat-value">{{ item.value }}</strong>
+        <strong class="stat-value" :class="{ warn: item.warn }">{{ item.value }}</strong>
       </article>
     </div>
+
+    <!-- 返工待办与管片拼装页同一份数据：直接读拼装记录里最新验收不通过的环，环数必然对得上。 -->
+    <section class="rework-ledger">
+      <header class="rework-head">
+        <h3>管片生产 · 返工待办（来自管片拼裝验收）</h3>
+        <span class="rework-count">待返工环数：{{ reworkRows.length }}</span>
+      </header>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>管片环号</th>
+            <th>管片型号</th>
+            <th>拼装班组</th>
+            <th>拼装日期</th>
+            <th>验收人</th>
+            <th>返工原因</th>
+            <th>判定标准版本</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in reworkRows" :key="String(row.id)">
+            <td>{{ row['管片环号'] ?? '—' }}</td>
+            <td>{{ row['管片型号'] ?? '—' }}</td>
+            <td>{{ row['拼装班组'] ?? '—' }}</td>
+            <td>{{ row['拼装日期'] ?? '—' }}</td>
+            <td>{{ row['验收人'] ?? '—' }}</td>
+            <td>{{ row['返工原因'] ?? '—' }}</td>
+            <td>{{ row['判定标准版本'] ?? '—' }}</td>
+          </tr>
+          <tr v-if="!reworkRows.length">
+            <td colspan="7" class="empty-state">暂无返工待办，验收不通过的环会在这里同步挂账</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
 
     <p class="status-legend">
       <span v-for="item in statusSummary" :key="item.status" class="legend-item">
@@ -79,19 +114,28 @@ import {
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
+import { reworkTodos } from '@/api/segment-service'
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('segmentprod')
 const columns = ["管片编号", "管片型号", "生产模具", "钢筋笼批号", "养护天数", "出厂强度", "检验人员", "生产状态"]
 const actions = ["开始浇筑", "确认养护", "办理出厂"]
 const statuses = ["待浇筑", "养护中", "待出厂", "已出厂"]
-const stats = [{"label": "养护中管片", "value": 0}, {"label": "待出厂管片", "value": 0}, {"label": "本月出厂数", "value": 0}]
 
 const rows = ref<EntryRow[]>([])
+const reworkRows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
+
+// 前三张卡沿用生产口径，第四张「返工环数」直接取拼装那一份，两边同数。
+const stats = computed(() => [
+  { label: "养护中管片", value: rows.value.filter((row) => row.status === '养护中').length, warn: false },
+  { label: "待出厂管片", value: rows.value.filter((row) => row.status === '待出厂').length, warn: false },
+  { label: "本月出厂数", value: rows.value.filter((row) => row.status === '已出厂').length, warn: false },
+  { label: "返工环数（拼装同步）", value: reworkRows.value.length, warn: reworkRows.value.length > 0 },
+])
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
     status,
@@ -128,6 +172,8 @@ function reload() {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total
+    // 返工待办不另存一份，直接取拼装记录的同一选择器。
+    reworkRows.value = reworkTodos()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '管片生产列表读取失败'
   }

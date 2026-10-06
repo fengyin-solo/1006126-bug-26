@@ -1,5 +1,6 @@
 import { MODULE_BY_KEY } from '@/data/modules'
 import { allRows, listRows, resetRows, saveRows } from '@/data/local-store'
+import { SEGMENT_MODULE_KEY, isSegmentAbnormal } from '@/data/segment'
 import type { ActionResult, EntryRow, ModuleMeta, OverviewResult, PageResult } from '@/data/types'
 
 // 会写进数据的「往回走」动作：命中就把这条记录标成异常态，看板上能一眼看出来。
@@ -30,6 +31,14 @@ export function listEntries(key: string, filters: Record<string, string> = {}): 
 
 export function runAction(key: string, id: number, action: string): ActionResult {
   const meta = moduleMeta(key)
+  // 管片拼装有单向流转护栏（跳级挡回、验收退回、越权驳回、原子提交），
+  // 通用动作入口一律不放行，必须走 api/segment-service。
+  if (key === SEGMENT_MODULE_KEY) {
+    return {
+      ok: false,
+      message: '管片拼装的状态流转必须走拼装专用入口（开始拼装 / 验收），通用动作已拦截',
+    }
+  }
   const target = meta.actionTargets[action]
   if (!target) {
     return { ok: false, message: `${meta.entity}没有登记「${action}」这个动作` }
@@ -88,11 +97,16 @@ export function loadOverview(): OverviewResult {
   const rows = allRows()
   const modules = [...MODULE_BY_KEY.values()].map((meta) => {
     const entries = rows[meta.key] ?? []
+    // 管片拼装的异常口径以领域返工待办为准，与两个台账页读到的同一份。
+    const abnormal =
+      meta.key === SEGMENT_MODULE_KEY
+        ? entries.filter((row) => isSegmentAbnormal(row)).length
+        : entries.filter((row) => row.abnormal).length
     return {
       name: meta.name,
       created: entries.length,
       pending: entries.filter((row) => row.pending).length,
-      abnormal: entries.filter((row) => row.abnormal).length,
+      abnormal,
     }
   })
   const cards = [

@@ -5,7 +5,8 @@ export type EntryRow = {
   status: string
   pending: boolean
   abnormal: boolean
-  [field: string]: string | number | boolean
+  // 领域字段（如验收历史、幂等请求号）允许挂数组，仍收在同一条记录里，不另开第二份。
+  [field: string]: string | number | boolean | unknown[] | null
 }
 
 export type ModuleMeta = {
